@@ -59,7 +59,7 @@ func Start() {
 	}
 	defer file.Close()
 	b, err := ioutil.ReadAll(file)
-	token := string(b)
+	token := strings.Replace(string(b), "\n", "", -1)
 
 	//connecting with the bot
 	goBot, err = discordgo.New("Bot " + token)
