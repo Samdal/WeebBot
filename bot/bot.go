@@ -4,7 +4,9 @@ import (
 	//standard libraries
 	"encoding/json"
 	"fmt" //format
+	"io/ioutil"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings" //(https://golang.org/pkg/strings/)
 	"time"
@@ -49,8 +51,14 @@ func Start(t time.Time) {
 	config.ReadUsr()
 
 	var goBot *discordgo.Session
+
+	file, err := os.Open("bot/token")
+	checkerror(err)
+	defer file.Close()
+	b, err := ioutil.ReadAll(file)
+	token := string(b)
 	//connecting with the bot
-	goBot, err := discordgo.New("Bot " + config.Token)
+	goBot, err = discordgo.New("Bot " + token)
 	if checkerror(err) {
 		return
 	}

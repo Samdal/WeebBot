@@ -11,9 +11,6 @@ import (
 var (
 	// Public variables
 
-	//Token : bot token
-	Token string
-
 	//BotPrefix : list of bot prefixes
 	BotPrefix []string
 
@@ -53,7 +50,6 @@ func ReadConfig() error {
 		fmt.Println(err.Error())
 		return err
 	}
-	Token = config.Token
 	BotPrefix = config.BotPrefix
 	return nil
 }
