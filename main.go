@@ -2,23 +2,14 @@ package main
 
 import (
 	"fmt"
-	"time"
 
-	"./bot"    //pulls bot folder
-	"./config" //pulls config folder
+	"./bot" //pulls bot folder
 )
 
 func main() {
 	fmt.Println("Starting bot")
-	start := time.Now()
 
-	err := config.ReadConfig()
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-
-	bot.Start(start)
+	bot.Start()
 
 	<-make(chan struct{}) //keeps the program running
 }

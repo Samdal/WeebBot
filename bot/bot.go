@@ -26,7 +26,6 @@ var (
 	timeupdate    time.Duration = 5
 	farge                       = 0x00FF00FF
 	nameAuthor                  = "DRAVA#8380 | Weeb BOT | Coded in Go"
-	ver                         = "version 0.6.1"
 	bug                         = false
 	searchPage    int           = 0
 	srch          config.AnimeSearchStruct
@@ -34,40 +33,48 @@ var (
 	lastSearch    time.Time
 	animesearch   *discordgo.Message
 	animeSearchID string
+	botPrefix     = [8]string{"W!", "w!", "!w", "!W", "1w", "1W", "w1", "W!"}
 )
 
-//Start is a function called in main that starts the program
-func Start(t time.Time) {
-	//reads information from json files
-	color.Blue("reading config files")
+//Start is a function called in main that starts the bot
+func Start() {
+	//starts timer that prints how long it took to start the bot
+	t := time.Now()
 
+	//reads information from json files
 	color.Blue("reading custom prefixes")
 	config.ReadCustomPrefix()
-	color.Blue("reading blacklist")
-	config.ReadBlacklist()
 	color.Blue("reading waifues")
 	config.ReadWaifu()
 	color.Blue("reading user list")
 	config.ReadUsr()
 
+	//start a session
 	var goBot *discordgo.Session
 
+	//read the token
 	file, err := os.Open("bot/token")
-	checkerror(err)
+	if checkerror(err) {
+		return
+	}
 	defer file.Close()
 	b, err := ioutil.ReadAll(file)
 	token := string(b)
+
 	//connecting with the bot
 	goBot, err = discordgo.New("Bot " + token)
 	if checkerror(err) {
 		return
 	}
-	//a massegeHandler runs every time something is written somewhere the bot can access
+
+	//massegeHandler runs every time a message is sent
 	goBot.AddHandler(messageHandler)
+	//Open creates a websocket connection to Discord.
 	err = goBot.Open()
 	if checkerror(err) {
 		return
 	}
+
 	//finished starting up
 	color.Green("Bot is running!")
 	fmt.Println("Starting bot took:", time.Since(t))
@@ -81,20 +88,23 @@ func Start(t time.Time) {
 	}()
 }
 
-//this function's work is to direct information to the right function (currently only with and without prefix)
+//this function's work is to direct information to the right function
 func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.Bot || config.MapBlack[m.Author.ID] { //if author is bot or in blacklist, return
-		return
-	}
-	for _, botprefix := range config.BotPrefix { //checks all prefixes in slice, with space behind it, and without
-		if strings.HasPrefix(m.Content, string(botprefix)+" ") {
-			m.Content = strings.Replace(m.Content, string(botprefix)+" ", "", 1)
+
+	//i have decided to have a bunch of prefixes in an array
+	for _, prefix := range botPrefix { //checks all prefixes in slice, with space behind it, and without
+		if strings.HasPrefix(m.Content, string(prefix)+" ") {
+			m.Content = strings.Replace(m.Content, string(prefix)+" ", "", 1)
 			withPrefix(s, m)
 			return
-		} else if strings.HasPrefix(m.Content, string(botprefix)) {
-			m.Content = strings.Replace(m.Content, string(botprefix), "", 1)
+
+			//checks if someone used a space at the end
+		} else if strings.HasPrefix(m.Content, string(prefix)) {
+			m.Content = strings.Replace(m.Content, string(prefix), "", 1)
 			withPrefix(s, m)
 			return
+
+			//checks if a user used a custum prefix
 		} else if strings.HasPrefix(m.Content, config.MapPrefix[m.Author.ID]) {
 			//Checks if the user has a custom prefix wich is being called
 			if strings.HasPrefix(m.Content, config.MapPrefix[m.Author.ID]+" ") {
@@ -104,22 +114,23 @@ func messageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}
 	}
+	//if no prefix is found
 	withoutprefix(s, m)
 	return
 }
 
-//currently no commands that doesn't include a prefix
+//withoutprefix does stuff where there is no prefix
 func withoutprefix(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.ChannelID != animeSearchID || time.Since(lastSearch).Seconds() > 60 {
 		return
 	}
 
 	var chooseMax int
-	if len(srch.Data.Page.Media) == 0 {
-		go s.MessageReactionAdd(m.ChannelID, m.ID, "❌")
-		return
-	}
 	if m.Content == "n" {
+		if len(srch.Data.Page.Media) == 0 {
+			go s.MessageReactionAdd(m.ChannelID, m.ID, "❌")
+			return
+		}
 		searchPage++
 		if searchPage >= len(srch.Data.Page.Media)-1 {
 			searchPage = 0
@@ -131,6 +142,10 @@ func withoutprefix(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	if m.Content == "b" {
+		if len(srch.Data.Page.Media) == 0 {
+			go s.MessageReactionAdd(m.ChannelID, m.ID, "❌")
+			return
+		}
 		searchPage--
 		if searchPage < 0 {
 			searchPage = len(srch.Data.Page.Media) - 1
@@ -142,25 +157,33 @@ func withoutprefix(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	if len(srch.Data.Page.Media[searchPage].Relations.Edges) > 3 {
-		chooseMax = 3
-	} else {
-		chooseMax = len(srch.Data.Page.Media[searchPage].Relations.Edges)
-	}
-	for i := 0; i <= chooseMax; i++ {
-		if strings.HasPrefix(m.Content, "r"+strconv.Itoa(i)) {
-			srch = config.AnimeSearch(strings.ReplaceAll(m.Content, " ", "-"), "NONE", strconv.Itoa(srch.Data.Page.Media[searchPage].Relations.Nodes[i].ID))
-			if len(srch.Data.Page.Media) == 0 {
-				go s.MessageReactionAdd(m.ChannelID, m.ID, "❌")
-				return
-			}
-			go s.ChannelMessageDelete(m.ChannelID, m.ID)
-			animeEmbed := createAnimeEmbed(srch)
-			_, err := s.ChannelMessageEditEmbed(animesearch.ChannelID, animesearch.ID, &animeEmbed)
-			checkerror(err)
+	if strings.HasPrefix(m.Content, "f") {
+		if len(srch.Data.Page.Media) == 0 {
+			go s.MessageReactionAdd(m.ChannelID, m.ID, "❌")
 			return
 		}
+		if len(srch.Data.Page.Media[searchPage].Relations.Edges) > 3 {
+			chooseMax = 3
+		} else {
+			chooseMax = len(srch.Data.Page.Media[searchPage].Relations.Edges)
+		}
+
+		for i := 0; i <= chooseMax; i++ {
+			if strings.HasPrefix(m.Content, "r"+strconv.Itoa(i)) {
+				srch = config.AnimeSearch(strings.ReplaceAll(m.Content, " ", "-"), "NONE", strconv.Itoa(srch.Data.Page.Media[searchPage].Relations.Nodes[i].ID))
+				if len(srch.Data.Page.Media) == 0 {
+					go s.MessageReactionAdd(m.ChannelID, m.ID, "❌")
+					return
+				}
+				go s.ChannelMessageDelete(m.ChannelID, m.ID)
+				animeEmbed := createAnimeEmbed(srch)
+				_, err := s.ChannelMessageEditEmbed(animesearch.ChannelID, animesearch.ID, &animeEmbed)
+				checkerror(err)
+				return
+			}
+		}
 	}
+
 	return
 }
 
@@ -185,30 +208,9 @@ func withPrefix(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	//here are some private commands
 	if m.Author.ID == "313703847656816642" {
-		//blacklisting
-		if strings.HasPrefix(m.Content, "blacklist ") {
-			//removing waste from the message to acces the id mentioned
-			list := strings.Replace(m.Content, "blacklist <@", "", 1)
-			list = strings.Replace(list, "blacklist ", "", 1)
-			list = strings.Replace(list, ">", "", 1)
-			list = strings.Replace(list, "!", "", 1)
 
-			//goes in config.go and sends a command to add the mentioned ID to the blacklist
-			config.SetBlacklist(list, true)
-			go s.MessageReactionAdd(m.ChannelID, m.ID, "✅")
-			return
-			//removing from blacklist
-		} else if strings.HasPrefix(m.Content, "whitelist ") {
-			list := strings.Replace(m.Content, "whitelist <@", "", 1)
-			list = strings.Replace(list, "whitelist ", "", 1)
-			list = strings.Replace(list, ">", "", 1)
-			list = strings.Replace(list, "!", "", 1)
-
-			config.SetBlacklist(list, false)
-			go s.MessageReactionAdd(m.ChannelID, m.ID, "✅")
-			return
-			//change the "playing" status in discord
-		} else if stringsIterate("prefix", []string{"update ", "status ", "presence "}, m) {
+		//updating bot status
+		if stringsIterate("prefix", []string{"update ", "status ", "presence "}, m) {
 			//different prefixes need to be removed in order to acces the wanted word
 			m.Content = strings.Replace(m.Content, "update ", "", 1)
 			m.Content = strings.Replace(m.Content, "status ", "", 1)
@@ -217,38 +219,6 @@ func withPrefix(s *discordgo.Session, m *discordgo.MessageCreate) {
 			go s.MessageReactionAdd(m.ChannelID, m.ID, "✅")
 			return
 			//sending message back to somone who uses the report function of the bot
-		} else if strings.HasPrefix(m.Content, "msg ") {
-			if lastreport == "" {
-				go s.MessageReactionAdd(m.ChannelID, m.ID, "❌")
-				return
-			}
-			Msg := strings.Replace(m.Content, "msg ", "", 1)
-
-			//creates a dm channel
-			dm, err := s.UserChannelCreate(lastreport)
-			if checkerror(err) {
-				return
-			}
-			s.ChannelMessageSend(dm.ID, Msg)
-			go s.MessageReactionAdd(m.ChannelID, m.ID, "✅")
-			return
-			//changing the speed of the "playing" status change
-		} else if stringsIterate("prefix", []string{"time ", "speed "}, m) {
-			m.Content = strings.Replace(m.Content, "time ", "", 1)
-			m.Content = strings.Replace(m.Content, "speed ", "", 1)
-			timing := map[string]time.Duration{
-				"superfast": 1,
-				"super":     2,
-				"fast":      3,
-				"normal":    5,
-				"slow":      7,
-				"snegle":    10,
-			}
-
-			timeupdate = timing[m.Content]
-			go s.MessageReactionAdd(m.ChannelID, m.ID, "✅")
-			return
-			//im using this command to print the unicode of emojies
 		} else if strings.HasPrefix(m.Content, "emoji ") {
 			m.Content = strings.Replace(m.Content, "emoji ", "", 1)
 			return
@@ -503,7 +473,7 @@ func withPrefix(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 	//if wednesday, send wednesday meme
-	dag := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/DDCsXo"}, Footer: &discordgo.MessageEmbedFooter{Text: ver}}
+	dag := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/DDCsXo"}}
 	if m.Content == "dag" {
 		if int(weekday) == day {
 			s.ChannelMessageSendEmbed(m.ChannelID, dag)
@@ -673,7 +643,6 @@ func simplecommands(s *discordgo.Session, m *discordgo.MessageCreate) bool {
 	help := &discordgo.MessageEmbed{
 		Color:  farge,
 		Author: &discordgo.MessageEmbedAuthor{Name: nameAuthor},
-		Footer: &discordgo.MessageEmbedFooter{Text: ver},
 		Fields: []*discordgo.MessageEmbedField{
 			&discordgo.MessageEmbedField{Name: "anime user account", Value: "`w!help user`", Inline: true},
 			&discordgo.MessageEmbedField{Name: "weakly pleasure", Value: "`w!dag`", Inline: true},
@@ -694,14 +663,13 @@ func simplecommands(s *discordgo.Session, m *discordgo.MessageCreate) bool {
 	}
 
 	//embeded messages (posts a picture instead of url link)
-	daze := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/9kcYHA"}, Footer: &discordgo.MessageEmbedFooter{Text: ver}}
-	Ex := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/M6Wtz7"}, Footer: &discordgo.MessageEmbedFooter{Text: ver}}
-	pat := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/ekHWCV"}, Footer: &discordgo.MessageEmbedFooter{Text: ver}}
+	daze := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/9kcYHA"}}
+	Ex := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/M6Wtz7"}}
+	pat := &discordgo.MessageEmbed{Color: farge, Image: &discordgo.MessageEmbedImage{URL: "https://goo.gl/ekHWCV"}}
 
 	helpAnime := &discordgo.MessageEmbed{
 		Color:  farge,
 		Author: &discordgo.MessageEmbedAuthor{Name: "Makes a search on some streaming sites or for anime information on Anilist"},
-		Footer: &discordgo.MessageEmbedFooter{Text: ver},
 		Fields: []*discordgo.MessageEmbedField{
 			&discordgo.MessageEmbedField{Name: "w!cru/w!crunchyroll \"anime\"", Value: "Example: w!cunchyroll naruto", Inline: false},
 			&discordgo.MessageEmbedField{Name: "w!kiss \"anime\"", Value: "Example: w!kiss dragon ball", Inline: false},
@@ -717,7 +685,6 @@ func simplecommands(s *discordgo.Session, m *discordgo.MessageCreate) bool {
 	helpuser := &discordgo.MessageEmbed{
 		Color:  farge,
 		Author: &discordgo.MessageEmbedAuthor{Name: "There are multiple commands that can be used with an anime account"},
-		Footer: &discordgo.MessageEmbedFooter{Text: "Supported services are MAL, Kitsu and AniList |" + ver},
 		Fields: []*discordgo.MessageEmbedField{
 			&discordgo.MessageEmbedField{Name: "w!set usr [user link]", Value: "Example:\nw!set user https://anilist.co/user/Drava/animelist\nw!set user https://kitsu.io/users/drava\nw!set user https://myanimelist.net/profile/Drava", Inline: false},
 			&discordgo.MessageEmbedField{Name: "Looking up your own account", Value: "w!lib(library)\nw!cur/wat(current/watching)\nw!pla/wan (planned/want2watch)\nw!com(completed)\nw!hold(on hold)\nw!drop(dropped)", Inline: false},
@@ -728,7 +695,6 @@ func simplecommands(s *discordgo.Session, m *discordgo.MessageCreate) bool {
 	helpfiller := &discordgo.MessageEmbed{
 		Color:  farge,
 		Author: &discordgo.MessageEmbedAuthor{Name: "Makes a search in animefillerlist for the anime"},
-		Footer: &discordgo.MessageEmbedFooter{Text: ver},
 		Fields: []*discordgo.MessageEmbedField{
 			&discordgo.MessageEmbedField{Name: "w!filler \"anime\"", Value: "Example:\nw!filler naruto\nw!fill boruto naruto next generations\nw!fil Bleach", Inline: false},
 		},
@@ -737,7 +703,6 @@ func simplecommands(s *discordgo.Session, m *discordgo.MessageCreate) bool {
 	helpwaifu := &discordgo.MessageEmbed{
 		Color:  farge,
 		Author: &discordgo.MessageEmbedAuthor{Name: "you can set your own personal waifu/husbando, "},
-		Footer: &discordgo.MessageEmbedFooter{Text: ver},
 		Fields: []*discordgo.MessageEmbedField{
 			&discordgo.MessageEmbedField{Name: "Setting your own waifu / husbando", Value: "w!set waifu \"waifu\" \nw!husbando \"husbando\"", Inline: false},
 			&discordgo.MessageEmbedField{Name: "Viewing your own waifu / husbando", Value: "w!waifu\nw!husbando", Inline: false},
@@ -748,7 +713,6 @@ func simplecommands(s *discordgo.Session, m *discordgo.MessageCreate) bool {
 	helplanguage := &discordgo.MessageEmbed{
 		Color:  farge,
 		Author: &discordgo.MessageEmbedAuthor{Name: "You can chage your sentence in amazingly weeb ways!!"},
-		Footer: &discordgo.MessageEmbedFooter{Text: ver},
 		Fields: []*discordgo.MessageEmbedField{
 			&discordgo.MessageEmbedField{Name: "Translate romanji to hiragana", Value: "w!hir \"sentence\" \nw!hiragana \"sentence\"", Inline: false},
 			&discordgo.MessageEmbedField{Name: "nyaow you can talk like a neko nya", Value: "w!neko \"sentence\"", Inline: false},
@@ -785,72 +749,37 @@ func simplecommands(s *discordgo.Session, m *discordgo.MessageCreate) bool {
 
 	//all simple commands
 	simple := map[string]string{
-		"waifu":                  "Your waifu is " + config.MapWaifu[m.Author.ID],
-		"husbando":               "Your husbando is " + config.MapWaifu[m.Author.ID],
-		"prefix":                 "Your custom prefix is `" + config.MapPrefix[m.Author.ID] + "`",
-		"help define":            "define has sadly been removed from this bot ;(",
-		"ani":                    "https://kitsu.io/anime/",
-		"cru":                    "http://www.crunchyroll.com/",
-		"man":                    "https://kitsu.io/manga/",
-		"kiss":                   "https://kissanime.ac/",
-		"9":                      "https://www1.9anime.to/",
-		"s":                      "https://www.livechart.me", //TODO improve with scraper
-		"t":                      "https://twist.moe",
-		"twist":                  "https://twist.moe",
-		"help hir":               "converts latin alphabet into hiragana\n`w!hir`",
-		"help filler":            "makes a search in animefillerlist for the anime\n" + "`w!filler \"filler_anime\"`",
-		"help s":                 "opens anichart (popular anime this season)\nmore comands planned\n`" + `w!s` + "`",
-		"help prefix":            "you can set your own personal custom prefix\n`" + `w!set prefix "your new prefix", w!prefix (returns your custom prefix)` + "`",
-		"help waifu":             "you can set your own personal waifu\n`" + "w!set waifu \"waifu\"\nw!waifu @user (returns user's waifu)\nw!waifu (returns your waifu)" + "`",
-		"help report":            "you can send direct messeges to Author with these commands, if you spam you will be blacklisted\n`" + `w!msg/bug/report <your message>` + "`",
-		"help tips":              "Use the prefix `dm` or `pm` after the main prefix to direct message your answer\n",
-		"update":                 "you need weebgod lisence to do that!",
-		"status":                 "you need weebgod lisence to do that!",
-		"presence":               "you need weebgod lisence to do that!",
-		"ping":                   "i hear you loud and clear",
-		"kitsu":                  "https://kitsu.io",
-		"kit":                    "https://kitsu.io",
-		"k":                      "https://kitsu.io",
-		"mal":                    "https://myanimelist.net/",
-		"m":                      "https://myanimelist.net/",
-		"anilist":                "https://anilist.co",
-		"love":                   "love u2 :heart:",
-		"legend":                 "the name is Atle",
-		"ur mom gay":             "*rebel is angery",
-		"speedtest":              "this command is at the bottom of the code",
-		"easteregg":              "here you go",
-		"påskeegg":               "også på norsk",
-		"maker":                  "god",
-		"do a barrel roll":       "i can't",
-		"parkour":                "maybe one day",
-		"favorit anime":          "you :heart:",
-		"rebel":                  "i know im cultural :flag_jp: , but lets be friends",
-		"clueless":               "have you heard about anime? I recommend it ( ͡° ͜ʖ ͡°)",
-		"drug":                   "also called anime",
-		"red bot chillipeppers":  "that bot is pure culture my dude",
-		"python":                 "it tastes shit",
-		"go":                     "should i say, my organs?",
-		"golang":                 "should i say, my organs?",
-		"weeb":                   "watashi?",
-		"gay":                    "your life is cinda sad if your calling a discord bot gay",
-		"welcome":                "tuturu~~ okarin :heart:",
-		"legana":                 "vegana, your dick is now a llama",
-		"norge":                  "\"alt for norge\"\n         -Haakon VII",
-		"omae wa mou shinde iru": "NANI!!",
-		"omae wa mou shindeiru":  "NANI!!",
-		"omae wa mo shindeiru":   "NANI!!",
-		"english":                "not my primary language ¯\\_(ツ)_/¯",
-		"æøå":                    "du ser ut som en madlad",
-		"jesus":                  "the name of my goat",
-		"lenny":                  "( ͡° ͜ʖ ͡°)",
-		"( ͡° ͜ʖ ͡°)":            "...",
-		"dab":                    "total madlad",
-		"yare":                   "yare yare daze",
-		"excuse":                 "me wtf",
-		"pat":                    "to fast for pat",
-		"help":                   "apperently not working",
-		"hjelp":                  "apperently not working",
-		"invite":                 "https://discord.com/oauth2/authorize?client_id=486926277702320148&scope=bot&permissions=0",
+		"waifu":       "Your waifu is " + config.MapWaifu[m.Author.ID],
+		"husbando":    "Your husbando is " + config.MapWaifu[m.Author.ID],
+		"prefix":      "Your custom prefix is `" + config.MapPrefix[m.Author.ID] + "`",
+		"help define": "define has sadly been removed from this bot ;(",
+		"ani":         "https://kitsu.io/anime/",
+		"cru":         "http://www.crunchyroll.com/",
+		"man":         "https://kitsu.io/manga/",
+		"kiss":        "https://kissanime.ac/",
+		"9":           "https://www1.9anime.to/",
+		"s":           "https://www.livechart.me", //TODO improve with scraper
+		"t":           "https://twist.moe",
+		"twist":       "https://twist.moe",
+		"help hir":    "converts latin alphabet into hiragana\n`w!hir`",
+		"help filler": "makes a search in animefillerlist for the anime\n" + "`w!filler \"filler_anime\"`",
+		"help s":      "opens anichart (popular anime this season)\nmore comands planned\n`" + `w!s` + "`",
+		"help prefix": "you can set your own personal custom prefix\n`" + `w!set prefix "your new prefix", w!prefix (returns your custom prefix)` + "`",
+		"help waifu":  "you can set your own personal waifu\n`" + "w!set waifu \"waifu\"\nw!waifu @user (returns user's waifu)\nw!waifu (returns your waifu)" + "`",
+		"help report": "you can send direct messeges to Author with these commands, if you spam you will be blacklisted\n`" + `w!msg/bug/report <your message>` + "`",
+		"help tips":   "Use the prefix `dm` or `pm` after the main prefix to direct message your answer\n",
+		"update":      "you need weebgod lisence to do that!",
+		"status":      "you need weebgod lisence to do that!",
+		"presence":    "you need weebgod lisence to do that!",
+		"ping":        "i hear you loud and clear",
+		"kitsu":       "https://kitsu.io",
+		"kit":         "https://kitsu.io",
+		"k":           "https://kitsu.io",
+		"mal":         "https://myanimelist.net/",
+		"m":           "https://myanimelist.net/",
+		"anilist":     "https://anilist.co",
+		"lenny":       "( ͡° ͜ʖ ͡°)",
+		"invite":      "https://discord.com/oauth2/authorize?client_id=486926277702320148&scope=bot&permissions=0",
 	}
 
 	for key := range simple {

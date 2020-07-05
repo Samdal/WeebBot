@@ -2,57 +2,19 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os/exec"
 )
 
 var (
-	// Public variables
-
-	//BotPrefix : list of bot prefixes
-	BotPrefix []string
-
-	//maps (have to be public for Read and Write to work)
-
 	//MapWaifu : map of current saved waifu's
 	MapWaifu map[string]string
 	//MapPrefix : contains all users custum prefixes
 	MapPrefix map[string]string
-	//MapUsr : list of users and asociated accounts
+	//MapUsr : users and asociated accounts
 	MapUsr map[string]string
-	//MapBlack : list of blacklisted users
-	MapBlack map[string]bool
-
-	// Private variables
-
-	config *configStruct
 )
-
-type configStruct struct {
-	Token     string   `json:"Token"`
-	BotPrefix []string `json:"BotPrefix"`
-}
-
-//ReadConfig ...
-//reads the config file that contains the ID and prefixes
-func ReadConfig() error {
-	filename := "./config/json/config.json"
-	file, err := ioutil.ReadFile(filename)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return err
-	}
-	err = json.Unmarshal(file, &config)
-	if err != nil {
-		fmt.Println(err.Error())
-		return err
-	}
-	BotPrefix = config.BotPrefix
-	return nil
-}
 
 //ReadCustomPrefix ...
 //reads the custm prefixes
@@ -165,43 +127,6 @@ func SetUsr(idImport string, usrImport string) {
 	//pushes byte array to json file
 	err = ioutil.WriteFile("./config/json/usr.json", jsonString, 0644)
 	ReadUsr() //reads json new file
-	return
-}
-
-//ReadBlacklist ...
-//reads the black list
-func ReadBlacklist() {
-	JSONText, err := ioutil.ReadFile("./config/json/blacklist.json")
-	if err != nil {
-		log.Println(err)
-	}
-	// Unmarshal json data structure to map
-	err = json.Unmarshal(JSONText, &MapBlack)
-	if err != nil {
-		panic(err)
-	}
-}
-
-//SetBlacklist ...
-//sets the blacklist
-func SetBlacklist(idImport string, blacklistImport bool) {
-	//makes new key and value based on input in discord
-	delete(MapBlack, idImport)
-	MewMapBlack := map[string]bool{
-		idImport: blacklistImport,
-	}
-	//in order to add MewMapBlack to MapBlack we use range in a for loop (append does not work with maps)
-	for K, V := range MapBlack {
-		MewMapBlack[K] = V
-	}
-	//marshal (makes a byte array out of map)
-	jsonString, err := json.Marshal(MewMapBlack)
-	if err != nil {
-		log.Println(err)
-	}
-	//pushes byte array to json file
-	err = ioutil.WriteFile("./config/json/blacklist.json", jsonString, 0644)
-	ReadBlacklist() //reads json new file
 	return
 }
 
