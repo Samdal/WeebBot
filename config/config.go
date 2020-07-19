@@ -10,51 +10,14 @@ import (
 var (
 	//MapWaifu : map of current saved waifu's
 	MapWaifu map[string]string
-	//MapPrefix : contains all users custum prefixes
-	MapPrefix map[string]string
 	//MapUsr : users and asociated accounts
 	MapUsr map[string]string
 )
 
-//ReadCustomPrefix ...
-//reads the custm prefixes
-func ReadCustomPrefix() {
-	JSONText, err := ioutil.ReadFile("./config/json/prefix.json")
-	if err != nil {
-		log.Println(err)
-	}
-	// Unmarshal json data structure to map
-	err = json.Unmarshal(JSONText, &MapPrefix)
-	if err != nil {
-		panic(err)
-	}
-}
-
-//SetCustomPrefix ...
-//sets a custum prefix for that user
-func SetCustomPrefix(idImport string, prefixImport string) {
-	delete(MapPrefix, idImport) //deletes value if it already exists in map
-	//makes new key and value based on input in discord
-	NewMapPrefix := map[string]string{
-		idImport: prefixImport,
-	}
-	//in order to add NewMapPrefix to MapPrefix we use range in a for loop (append does not work with maps)
-	for K, V := range MapPrefix {
-		NewMapPrefix[K] = V
-	}
-	//marshal (makes a byte array out of map)
-	jsonString, err := json.Marshal(NewMapPrefix)
-	if err != nil {
-		log.Println(err)
-	}
-	//pushes byte array to json file
-	err = ioutil.WriteFile("./config/json/prefix.json", jsonString, 0644)
-	return
-}
-
 //ReadWaifu ...
 //reads all the waifus
 func ReadWaifu() {
+	//read json file
 	JSONText, err := ioutil.ReadFile("./config/json/waifu.json")
 	if err != nil {
 		log.Println(err)
@@ -69,35 +32,44 @@ func ReadWaifu() {
 //SetWaifu ...
 //sets a users waifu
 func SetWaifu(idImport string, waifuImport string) {
-	if MapWaifu[idImport] != "" { //deletes value if it already exists in map
+	//deletes value if it already exists in map
+	if MapWaifu[idImport] != "" {
 		delete(MapWaifu, idImport)
 	}
+
 	//makes new key and value based on input in discord
 	MewMapWaifu := map[string]string{
 		idImport: waifuImport,
 	}
+
 	//in order to add MewMapWaifu to MapWaifu we use range in a for loop (append does not work with maps)
 	for K, V := range MapWaifu {
 		MewMapWaifu[K] = V
 	}
+
 	//marshal (makes a byte array out of map)
 	jsonString, err := json.Marshal(MewMapWaifu)
 	if err != nil {
 		log.Println(err)
 	}
+
 	//pushes byte array to json file
 	err = ioutil.WriteFile("./config/json/waifu.json", jsonString, 0644)
-	ReadWaifu() //reads json new file
+
+	//reads json new file
+	ReadWaifu()
 	return
 }
 
 // ReadUsr ...
 //reads the file of anime users
 func ReadUsr() {
+	//reads json file
 	JSONText, err := ioutil.ReadFile("./config/json/usr.json")
 	if err != nil {
 		log.Println(err)
 	}
+
 	// Unmarshal json data structure to map
 	err = json.Unmarshal(JSONText, &MapUsr)
 	if err != nil {
@@ -108,25 +80,32 @@ func ReadUsr() {
 //SetUsr ...
 //sets the user's anime account
 func SetUsr(idImport string, usrImport string) {
-	if MapUsr[idImport] != "" { //deletes value if it already exists in map
+	//deletes value if it already exists in map
+	if MapUsr[idImport] != "" {
 		delete(MapUsr, idImport)
 	}
+
 	//makes new key and value based on input in discord
 	MewMapUsr := map[string]string{
 		idImport: usrImport,
 	}
+
 	//in order to add MewMapUsr to MapUsr we use range in a for loop (append does not work with maps)
 	for K, V := range MapUsr {
 		MewMapUsr[K] = V
 	}
+
 	//marshal (makes a byte array out of map)
 	jsonString, err := json.Marshal(MewMapUsr)
 	if err != nil {
 		log.Println(err)
 	}
+
 	//pushes byte array to json file
 	err = ioutil.WriteFile("./config/json/usr.json", jsonString, 0644)
-	ReadUsr() //reads json new file
+
+	//reads json new file
+	ReadUsr()
 	return
 }
 
@@ -138,6 +117,7 @@ type AnimeSearchStruct struct {
 			PageInfo struct {
 				LastPage int `json:"lastPage"`
 			} `json:"pageInfo"`
+
 			Media []struct {
 				Status       string `json:"status"`
 				Format       string `json:"format"`
@@ -202,23 +182,27 @@ type AnimeSearchStruct struct {
 //searches for anime
 func AnimeSearch(query string, format string, id string) AnimeSearchStruct {
 
+	//do the HTTP POST request in python
+	//i do this since i couldn't find out how to do it in GO
+	//someone please help
 	cmd := exec.Command("python", "config/request.py", query, format, id)
 	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
 
+	//read json
 	response, err := ioutil.ReadFile("config/response.json")
 	if err != nil {
 		log.Println(err)
 	}
 
+	//Format into struct
 	var AnimeStruct AnimeSearchStruct
-
-	// Unmarshal json data structure to map
 	err = json.Unmarshal(response, &AnimeStruct)
 	if err != nil {
 		panic(err)
 	}
 
+	//returns the search struct
 	return AnimeStruct
 }
